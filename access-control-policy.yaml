@@ -1,0 +1,19 @@
+id: access-control-policy
+name: Access Control by Client Id
+description: クライアントIDによるアクセスコントロール
+category: Custom
+type: custom
+resourceLevelSupported: false
+encryptionSupported: false
+standalone: true
+requiredCharacteristics: []
+providedCharacteristics: []
+configuration:
+  - propertyName: accessControlList
+    name: クライアントIDとアクセス許可URIリスト
+    description: ClientID毎にアクセスを許可するURIリストを設定する。
+    type: string
+    optional: true
+    sensitive: false
+    defaultValue: ""
+    allowMultiple: true
