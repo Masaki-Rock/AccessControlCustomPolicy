@@ -1,64 +1,58 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <mule xmlns="http://www.mulesoft.org/schema/mule/core"
-      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-      xmlns:http-policy="http://www.mulesoft.org/schema/mule/http-policy"
-      xmlns:http-transform="http://www.mulesoft.org/schema/mule/http-policy-transform"
-      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
-      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
-      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
-               http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
-               http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
-               http://www.mulesoft.org/schema/mule/http-policy http://www.mulesoft.org/schema/mule/http-policy/current/mule-http-policy.xsd
-               http://www.mulesoft.org/schema/mule/http-policy-transform http://www.mulesoft.org/schema/mule/http-policy-transform/current/mule-http-policy-transform.xsd">
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:http-policy="http://www.mulesoft.org/schema/mule/http-policy"
+       xmlns:http-transform="http://www.mulesoft.org/schema/mule/http-policy-transform"
+       xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+       xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+       xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+       xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                           http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+                           http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+                           http://www.mulesoft.org/schema/mule/http-policy http://www.mulesoft.org/schema/mule/http-policy/current/mule-http-policy.xsd
+                           http://www.mulesoft.org/schema/mule/http-policy-transform http://www.mulesoft.org/schema/mule/http-policy-transform/current/mule-http-policy-transform.xsd">
 
-
-    <http-policy:proxy name="{{{policyId}}}-custom-policy">
-        <http-policy:source>
-        
-            <try>
-                <logger level="INFO" category="policy"/>
-                <flow-ref name="AccessPathCheckFlowforPolicy" />
-        
-                <http-policy:execute-next/>
-                <error-handler >
-                    <on-error-propagate enableNotifications="true" logException="true" type="VALIDATION:INVALID_SIZE">
-                        <http-transform:set-response statusCode="403" reasonPhrase="Forbidden">
-                            <http-transform:body>#[%dw 2.0
-output application/json
----
-{
-    "message": "アクセスが許可されていないパスに接続しようとしています。"
-}]</http-transform:body>
-                        </http-transform:set-response>
-                    </on-error-propagate>
-                </error-handler>
-            </try>
-        </http-policy:source>
-    </http-policy:proxy>
-    <flow name="AccessPathCheckFlowforPolicy" >
-
-        <set-payload value='#[{{{accessControlList}}}]' />
-        <logger level="INFO" category="check!" message="#[payload]"/>
-        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core">
-            <ee:message>
-                <ee:set-payload><![CDATA[%dw 2.0
-import * from dw::core::Arrays
-output application/java
----
-payload filter (item, index) -> (
-    item.client_Id == attributes.headers["client_Id"]
-    and (!isEmpty(item.allowedpath filter (citem, cindex) -> (attributes.maskedRequestPath as String startsWith(citem)))))]]></ee:set-payload>
-            </ee:message>
-            <ee:variables>
-            </ee:variables>
-        </ee:transform>
-        <logger level="INFO" category="check!" message="#[attributes.headers['client_Id']]" />
-        <logger level="INFO" category="check!" message="#[attributes.maskedRequestPath]" />
-        <logger level="INFO" category="check!" message="#[payload]"/>
-        <validation:validate-size value="#[payload]" message="The client ID or The access Path are not allowed by the policy. Please contact administorer." min="1" />
-    </flow>
-    <flow name="ErrorTypeDefineFlow" >
-      <raise-error doc:name="Invalid size error" type="VALIDATION:INVALID_SIZE"/>
-    </flow>
-</mule>
+  <http-policy:proxy name="{{{policyId}}}-custom-policy">
+    <http-policy:source>
+      <set-payload value="{{{accessControlList}}}" />
+      <set-variable value="{{{clientIdExpression}}}" doc:name="Set ClientId" variableName="clientId"/>
+      <ee:transform doc:name="AccessCheck" >
+        <ee:message >
+          <ee:set-payload >
+            <![CDATA[%dw 2.0  output application/json 
+            ---
+            payload replace /[\[\]]/ with ('') replace / \// with ('/') replace /\"/ with ('') replace /  / with (' ') splitBy(/ /) 
+            map ((item, index) -> item splitBy(/[,]/)) 
+            filter (item, index) -> (
+                 item[0] == vars.clientId
+                 and (attributes.maskedRequestPath startsWith(item[1] default '/' as String))
+                 and (item[1] default '/' as String) != '/')]]>
+          </ee:set-payload>
+        </ee:message>
+      </ee:transform>
+      <choice doc:name="AccessHandling" >
+        <when expression="sizeOf(payload) &lt;= 0">
+          <logger level="INFO" doc:name="ErrorLogger" message="#[
+            {
+                'title': '403 Forbidden',
+                'client_Id': vars.clientId,
+                'path': attributes.maskedRequestPath 
+            }]"/>
+          <http-transform:set-response statusCode="403" reasonPhrase="Forbidden">
+            <http-transform:body>#[%dw 2.0 output application/json 
+            --- 
+            {
+                'code': 'CLIENT:FORBIDDEN',
+                'message': 'アクセスが許可されていないパスに接続しようとしています。',
+                'X-Correlation-ID': attributes.headers['X-Correlation-ID']
+            }
+            ]</http-transform:body>
+          </http-transform:set-response>
+        </when>
+        <otherwise >
+          <http-policy:execute-next/>
+        </otherwise>
+      </choice>
+    </http-policy:source>
+  </http-policy:proxy>
+</mule> 
