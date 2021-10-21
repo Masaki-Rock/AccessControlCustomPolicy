@@ -15,44 +15,62 @@
   <http-policy:proxy name="{{{policyId}}}-custom-policy">
     <http-policy:source>
       <set-payload value="{{{accessControlList}}}" />
-      <set-variable value="{{{clientIdExpression}}}" doc:name="Set ClientId" variableName="clientId"/>
-      <ee:transform doc:name="AccessCheck" >
-        <ee:message >
-          <ee:set-payload >
-            <![CDATA[%dw 2.0  output application/json 
-            ---
-            payload replace /[\[\]]/ with ('') replace / \// with ('/') replace /\"/ with ('') replace /  / with (' ') splitBy(/ /) 
-            map ((item, index) -> item splitBy(/[,]/)) 
-            filter (item, index) -> (
-                 item[0] == vars.clientId
-                 and (attributes.maskedRequestPath startsWith(item[1] default '/' as String))
-                 and (item[1] default '/' as String) != '/')]]>
-          </ee:set-payload>
-        </ee:message>
-      </ee:transform>
-      <choice doc:name="AccessHandling" >
-        <when expression="sizeOf(payload) &lt;= 0">
-          <logger level="INFO" doc:name="ErrorLogger" message="#[
-            {
-                'title': '403 Forbidden',
-                'client_Id': vars.clientId,
-                'path': attributes.maskedRequestPath 
-            }]"/>
-          <http-transform:set-response statusCode="403" reasonPhrase="Forbidden">
-            <http-transform:body>#[%dw 2.0 output application/json 
-            --- 
-            {
-                'code': 'CLIENT:FORBIDDEN',
-                'message': 'アクセスが許可されていないパスに接続しようとしています。',
-                'X-Correlation-ID': attributes.headers['X-Correlation-ID']
-            }
-            ]</http-transform:body>
-          </http-transform:set-response>
-        </when>
-        <otherwise >
-          <http-policy:execute-next/>
-        </otherwise>
-      </choice>
+      <set-variable value="{{{clientIdExpression}}}" variableName="clientId"/>
+      <try>
+        <ee:transform doc:name="AccessCheck" >
+            <ee:message >
+            <ee:set-payload >
+                <![CDATA[%dw 2.0  output application/json 
+                ---
+                payload replace /[\[\]]/ with ('') replace / \// with ('/')
+                splitBy(/ /) map ((item, index) -> item splitBy(/[,]/)) 
+                filter (item, index) -> (
+                    item[0] == vars.clientId
+                    and (attributes.maskedRequestPath startsWith(item[1] default '/' as String))
+                    and (item[1] default '/' as String) != '/')]]>
+            </ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <choice doc:name="AccessHandling" >
+            <when expression="sizeOf(payload) &lt;= 0">
+            <logger level="INFO" doc:name="ErrorLogger" message="#[
+                {
+                    'title': '403 Forbidden',
+                    'client_Id': vars.clientId,
+                    'path': attributes.maskedRequestPath 
+                }]"/>
+            <http-transform:set-response statusCode="403" reasonPhrase="Forbidden">
+                <http-transform:body>#[%dw 2.0 output application/json 
+                --- 
+                {
+                    'code': 'CLIENT:FORBIDDEN',
+                    'message': 'アクセスが許可されていないパスに接続しようとしています。',
+                    'X-Correlation-ID': attributes.headers['X-Correlation-ID']
+                }
+                ]</http-transform:body>
+            </http-transform:set-response>
+            </when>
+            <otherwise >
+            <http-policy:execute-next/>
+            </otherwise>
+        </choice>
+        <error-handler >
+            <on-error-propagate enableNotifications="true" logException="true" type="ANY">
+                <http-transform:set-response statusCode="500" reasonPhrase="Internal Server Error">
+                    <http-transform:body><![CDATA[#[%dw 2.0
+                    output application/json
+                    ---
+                    {
+                        "code": "SERVER:MULE:UNEXPECTED",
+                        "message": "システム管理者に連絡してください。",
+                        "X-Correlation-ID": attributes.headers."X-Correlation-ID"
+                    }
+                    ]]]>]
+                    </http-transform:body>
+                </http-transform:set-response>
+            </on-error-propagate>
+        </error-handler>
+      </try>
     </http-policy:source>
   </http-policy:proxy>
 </mule> 

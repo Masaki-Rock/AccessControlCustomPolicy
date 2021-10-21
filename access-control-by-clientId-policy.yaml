@@ -15,13 +15,13 @@ configuration:
     type: string
     optional: false
     sensitive: false
-    defaultValue: ""
+    defaultValue: "d0e8384678e94571ab1e456bc3251ef9,/accounts"
     allowMultiple: true
   - propertyName: clientIdExpression
     name: クライアントID取得先
     description: ClientIDを取得する格納先を設定する。
-    type: string
+    type: expression
     optional: false
     sensitive: false
-    defaultValue: ""
+    defaultValue: "#[attributes.headers['client_id']]"
     allowMultiple: false

@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>f38bce11-0033-474c-bcce-0d22c0061902</groupId>
+    <groupId>{Bussiness-Group-Id}</groupId>
     <artifactId>access-control-by-clientId-policy</artifactId>
     <version>1.0.0</version>
 
@@ -15,7 +15,7 @@
 
     <properties>
         <mule.maven.plugin.version>3.3.6</mule.maven.plugin.version>
-        <exchange.url>https://maven.anypoint.mulesoft.com/api/v1/organizations/f38bce11-0033-474c-bcce-0d22c0061902/maven</exchange.url>
+        <exchange.url>https://maven.anypoint.mulesoft.com/api/v1/organizations/{Bussiness-Group-Id}/maven</exchange.url>
         <http.policy.transform.extension>3.1.0</http.policy.transform.extension>
     </properties>
 
